@@ -3,7 +3,11 @@
 "author": "Xaver Bauer",  
 "name": "Xavers Module",  
 "url": "",  
-"version": "1.0",  
-"build": 0,  
-"date": 0  
+"compatibility": {
+	"version": "4.2",
+	"date": 1492639200
+},
+"version": "1.63.8",  
+"build": 1638,  
+"date": 1515866032  
 }
