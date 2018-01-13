@@ -1,0 +1,11 @@
+{
+	"id": "{165092DF-XA00-4980-SWIT-20171212XLIB}",
+	"name": "RPCSplitterControl",
+	"type": 2,
+	"vendor": "Xaver Bauer",
+	"aliases":["RPC SplitterControl 1.2"],
+	"parentRequirements": [],
+	"childRequirements": ["{165092DF-CONT-4980-XB00-20171212XLIB}"],
+	"implemented": ["{165092DF-SWIT-4980-XB00-20171212XLIB}"],
+	"prefix": "RPCS"
+}
