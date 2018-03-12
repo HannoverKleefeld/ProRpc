@@ -1,20 +1,31 @@
-<?
+<?php
+/* 
+	@author Xaver Bauer
+	Created 16.02.2018 - 23:59:30
+*/
 if(!defined('DEBUG_LOADER'))define('DEBUG_LOADER',false);
-if(!defined('LIB_PHP_VERSION'))define('LIB_PHP_VERSION','');
-
-if(!function_exists('LIB_ClassAutoLoader')){
+require_once __DIR__. '/rpcconstants.inc';
+if(!function_exists('RPC_ClassAutoLoader')){
 	
-	DEFINE('LIB_INCLUDE_DIR',__DIR__);
-	DEFINE('RPC_CONFIG_DIR',__DIR__ . '/config/devices');
-	DEFINE('RPC_CACHE_DIR',__DIR__ . '/config/cache');
-	DEFINE('RPC_ICON_CACHE_DIR',__DIR__ . '/config/icons');
+	DEFINE('RPC_LIB_DIR',__DIR__);
+	DEFINE('RPC_CONFIG_DIR',__DIR__ . '/config');
+	// DEFINE('RPC_PREDEF_DIR',__DIR__ . '/predefines');
+	// DEFINE('RPC_CACHE_DIR',__DIR__ . '/cache');
+	
 	if(!file_exists(RPC_CONFIG_DIR))mkdir(RPC_CONFIG_DIR,755,true);
-	if(!file_exists(RPC_CACHE_DIR))mkdir(RPC_CACHE_DIR,755,true);
-	if(!file_exists(RPC_ICON_CACHE_DIR))mkdir(RPC_ICON_CACHE_DIR,755,true);
-	function LIB_ClassAutoLoader($class){
+
+	function RPC_ClassAutoLoader($class){
+		
 		
 		$class=strtolower($class);
-		$file =LIB_INCLUDE_DIR . "/$class";
+		if($class=='net'||$class=='xml'||$class=='url'||$class=='ip'||$class=='utf8'||$class=='debug'||$class=='utils')
+			$class='rpcclasses';
+		
+		if($class=="rpc")
+			$file =RPC_LIB_DIR . "/rpcclass";
+		else $file =RPC_LIB_DIR . "/$class";
+	
+		
 		$log=function($classFile) use ($class){
 			if(DEBUG_LOADER){
 				$ok=is_file($classFile)?'Load':'Check';
@@ -24,29 +35,31 @@ if(!function_exists('LIB_ClassAutoLoader')){
 					echo "ClassAutoLoader::$ok => $class :: $classFile\n";
 			}
 		};
-		if(LIB_PHP_VERSION){
-			$classFile="$file.class".LIB_PHP_VERSION.".php";
-			$log($classFile);
-			if(is_file($classFile)&&!class_exists($class)){ include $classFile; return true;}
-			$classFile="$file.trait".LIB_PHP_VERSION.".php";
-			$log($classFile);
-			if(is_file($classFile)&&!class_exists($class)) { include $classFile; return true; }
-		}	
+		$classFile="$file.php";
+		$log($classFile);
+		if(is_file($classFile)&&!class_exists($class)){ include_once $classFile; return true;}
 		$classFile="$file.class.php";
 		$log($classFile);
-		if(is_file($classFile)&&!class_exists($class)){ include $classFile; return true;}
-
-		$classFile="$file.trait.php";
-		$log($classFile);
-		if(is_file($classFile)&&!class_exists($class)) { include $classFile; return true; }
+		if(is_file($classFile)&&!class_exists($class)){ include_once $classFile; return true;}
 		
-		$classFile=LIB_INCLUDE_DIR . "/lib.$class.php";
-		$log($classFile);
-		if(is_file($classFile)&&!class_exists($class)) { include $classFile; return true; }
+// 		$classFile="$file.trait.php";
+// 		$log($classFile);
+// 		if(is_file($classFile)&&!class_exists($class)) { include $classFile; return true; }
+		
+// 		$classFile=LIB_INCLUDE_DIR . "/lib.$class.php";
+// 		$log($classFile);
+// 		if(is_file($classFile)&&!class_exists($class)) { include $classFile; return true; }
 			
 		return false;
 	}
-	spl_autoload_register('LIB_ClassAutoLoader');	 
+	spl_autoload_register('RPC_ClassAutoLoader');	 
 }
- 
+if(!function_exists('boolstr')){
+	function boolstr(bool $bool){
+		return $bool?'true':'false';
+	}
+}
+
+
+
 ?>

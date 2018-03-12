@@ -38,3 +38,6 @@ fix URL calls
 rewrite predefines.inc
 add support for user functions and service defaults in RPCBuilder class
 update RPCDevice class
+
+28.01.18
+Complete rewrite libs and Modules
