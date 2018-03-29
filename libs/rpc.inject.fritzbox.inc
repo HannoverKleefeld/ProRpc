@@ -8,7 +8,7 @@
 $RPC_Inject= [
 	[	
 		INJECT_MODELS	=> ['7390','7490','7590'],
-		INJECT_PROPS	=> PROP_USER
+		INJECT_PROPS	=> PROP_PHONE
 	]		
 ];
 

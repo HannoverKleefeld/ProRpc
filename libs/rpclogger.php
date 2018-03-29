@@ -10,8 +10,15 @@ class RpcLogger {
 	protected $classnames=[];
 	protected $logoptions;
 	protected $logFileHandle=0;
+	protected $logFileName = '';
 	protected $_runtimeDebugName='';
-	
+	/**
+	 *
+	 * @param int $LogOptions
+	 * @param string $LogFileName
+	 * @param RpcMessage $MessageObject
+	 *
+	 */
 	function __construct($LogOptions=DEBUG_ALL, $LogFileName='',RpcMessage $MessageObject=null){
 		$this->logoptions=$LogOptions;
 		$this->SetMessage($MessageObject);
@@ -20,10 +27,19 @@ class RpcLogger {
 	function __destruct(){
 		if($this->logFileHandle)fclose($this->logFileHandle);
 	}
+	function __wakeup(){
+// 		echo __CLASS__ . " => WAKEUP\n";
+		$this->SetLogFile($this->logFileName);
+	}
+ 	function __sleep(){
+// 		echo __CLASS__ . " => SLEEP\n";
+ 		return ['errors','oMessage','classnames','logoptions','logFileName','_runtimeDebugName'];
+ 	}
 	public function SetLogFile($LogFileName){
 		if($this->logFileHandle)fclose($this->logFileHandle);
+		$this->logFileName=$LogFileName;
 		if(!$LogFileName)return $this->logFileHandle=0;
-		$this->logFileHandle=fopen($LogFileName, "w");
+		if(!$this->logFileHandle=fopen($LogFileName, "w"))$this->logFileName='';
 		return true;
 	}
 	public function SetMessage(RpcMessage $MessageObject=null){
@@ -117,7 +133,14 @@ class RpcLogger {
 	}
 }
 interface iRpcLogger {
+	/**
+	 * @param RpcLogger $Logger
+	 * @return RpcLogger
+	 */
 	function AttachLogger(RpcLogger $Logger=null);
+	/**
+	 * @param RpcLogger $Logger
+	 */
 	function DetachLogger(RpcLogger $Logger=null);
 }
 

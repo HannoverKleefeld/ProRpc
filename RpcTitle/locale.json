@@ -1,0 +1,12 @@
+{
+	"translations": {
+		"de": {
+			"Title": "Titel",
+			"Description": "Beschreibung",
+			"Duration": "Laufzeit",
+			"Reltime": "Restzeit",
+			"Creator": "Ersteller",
+			"Artist": "Künstler"
+		}
+	}
+}

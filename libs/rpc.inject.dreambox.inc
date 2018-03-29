@@ -1176,42 +1176,6 @@ $RPC_Inject= [
 							]
 						]
 					],
-						
-// 					'volume'=>[	
-// 						FUNCTION_NAME => 'volume',
-// 						FUNCTION_PARAMS => [
-// 							PARAMS_IN =>[
-// 								[VALUE_NAME => 'VolumeMode',VALUE_TYPE => DATATYPE_STRING, VALUE_LIST=>['set','up','down','mute','get'],VALUE_DEFAULT => 'mute'],
-// 								[VALUE_NAME => 'DesiredVolume',	VALUE_TYPE => DATATYPE_UINT]
-// 							],
-// 							PARAMS_OUT=>[
-									
-// 							]
-// 						],
-// 						FUNCTION_SOURCE => 'switch($VolumeMode){
-// 	case "set" : $arg=["set"=>"set".$DesiredVolume];break;
-// 	case "get" : $arg=[];break;	
-// 	case "up"  : case "down": $arg=["set"=>$VolumeMode];break;
-// 	case "mute": 
-// 		if($result=$that->volume("get")){
-// 			if($result["ismuted"]!==(bool)$DesiredVolume){
-// 				$arg=["set"=>$VolumeMode];
-// 			}else{
-// 				return true;
-// 			}
-// 		}else $arg=null;
-// 		break;
-// 	default    : $arg=$that->error("Invalid volume mode: ".$VolumeMode,-100); break;
-// }
-// $r=$that->Vol($arg);
-// if($r && $r["result"]===false){
-// 	return $that->error("Command error {$r["resulttext"]}",-101);
-// }else {
-// 	unset($r["result"]);
-// 	unset($r["resulttext"]);
-// }
-// return $r;'
-// 					],
 					'SetVolume'=>[
 						FUNCTION_NAME => 'SetVolume',
 						FUNCTION_PARAMS => [
@@ -1278,7 +1242,75 @@ return $ok;'
 							PARAMS_OUT =>[	[VALUE_NAME => 'KeyCodes',	VALUE_TYPE => DATATYPE_ARRAY] ]
 						],
 						FUNCTION_SOURCE => 'return clone $Key_Codes;'
-					]
+					],
+					'GetPositionInfo'=>[
+						FUNCTION_NAME => 'GetPositionInfo',
+						FUNCTION_PARAMS => [
+							PARAMS_IN=>  [ $PRE_DefinedInstanceParam],
+							PARAMS_OUT =>[	[VALUE_NAME => 'Info',	VALUE_TYPE => DATATYPE_ARRAY] ]
+						],
+						FUNCTION_SOURCE => '
+$c=empty($STATIC["last_current"])?$STATIC["last_current"]=$this->GetCurrent($InstanceID):$STATIC["last_current"];
+if(empty($STATIC["last_vol"]))$STATIC["last_vol"]=["current"=>$c["volume"]["current"],"ismuted"=>$c["volume"]["ismuted"]];
+$s=&$c["service"];
+$e=&$c["eventlist"]["event"][0];
+if(is_array($e["eventprovidername"]))$e["eventprovidername"]="Video";
+$STATIC["last_transport_state"]=[
+  "CurrentTransportState" => $e["eventprovidername"]!="Video"?"PLAYING":"STOPPED",
+  "CurrentTransportStatus" => "OK",
+  "CurrentSpeed" => "1"
+];
+$item="<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\">";
+$item.="<item id=\"-1\" parentID=\"-1\" restricted=\"true\">";
+$item.="<res protocolInfo=\"x-stream-cifs:*:video/mpeg:*\" duration=\"".date("H:i:s",mktime(null,null,$e["eventduration"]))."\">".$s["servicereference"]."</res>";
+$item.="<r:streamContent></r:streamContent>";
+$desc=@$e["eventdescription"];
+if(!empty($desc) && is_array($desc))$desc=implode("\n",$desc);
+if(empty($desc))
+	$item.="<dc:title>{$e["eventtitle"]}</dc:title>";
+else $item.="<dc:title>$desc</dc:title>";
+if($e["eventprovidername"]=="Video")
+	$item.="<upnp:class>object.item.videoItem.videoStream</upnp:class>";
+else
+	$item.="<upnp:class>object.item.tvItem.tvStream</upnp:class>";
+$item.="<dc:creator>{$e["eventprovidername"]}</dc:creator>";
+$item.="<upnp:album>{$e["eventservicename"]}</upnp:album>";
+if($e["eventname"]==$e["eventservicename"])$e["eventname"]="Video";
+$item.="<r:albumArtist>{$e["eventname"]}</r:albumArtist>";
+$desc=@$e["eventdescriptionextended"];
+if(!empty($desc))$item.="<description>".stripslashes($desc)."</description>";
+$item.="</item>";
+$item.="</DIDL-Lite>";
+$info=array (
+	"Track" => "1",
+	"TrackDuration" => date("H:i:s",mktime(null,null,$e["eventduration"])),
+	"TrackMetaData" => $item,
+	"TrackURI" => $s["servicereference"],
+	"RelTime" => date("H:i:s",mktime(null,null,$e["eventremaining"])),
+	"AbsTime" => "NOT_IMPLEMENTED",
+);
+return $info;'
+					],
+					'GetTransportInfo'=>[
+						FUNCTION_NAME => 'GetTransportInfo',
+						FUNCTION_PARAMS => [
+							PARAMS_IN=>  [ $PRE_DefinedInstanceParam],
+							PARAMS_OUT =>[	
+									[ VALUE_NAME => 'CurrentTransportState',	VALUE_TYPE => DATATYPE_ARRAY] 
+							]
+						],
+						FUNCTION_SOURCE => 'if(empty($STATIC["last_transport_state"]))$this->GetTransportInfo($InstanceID);return $STATIC["last_transport_state"];'
+					],
+					'GetCurrentTransportActions'=>[
+						FUNCTION_NAME => 'GetCurrentTransportActions',
+						FUNCTION_PARAMS => [
+							PARAMS_IN=>  [ $PRE_DefinedInstanceParam],
+							PARAMS_OUT =>[	
+									[ VALUE_NAME => 'CurrentTransportActions',	VALUE_TYPE => DATATYPE_STRING] 
+							]
+						],
+						FUNCTION_SOURCE => 'return "STOPPED,PAUSED,PLAYING";'
+					]						
 				]
 			]		
 		]

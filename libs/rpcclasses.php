@@ -15,13 +15,27 @@ const
 	
 class URL {
 	protected $_URL = ['scheme'=>'','user'=>'','pass'=>'','host'=>'','port'=>0,'path'=>'','query'=>'','fragment'=>''];
-	function __construct($Host=''){
+	/**
+	 * Create a new URL Object
+	 * @param	string	$Host	Url_to_parse
+	 */
+	public function __construct($Host){
 		$this->Set($Host);
 	}
-	function __toString(){
+	/**
+	 * @return string	Return object as UrlString
+	 */
+	public function __toString(){
 		return $this->Get();
 	}
-	public static function parse($Url, array $ConvertKeys=null ){
+	/**
+	 * same as parse_url function but return all keys empty or not
+	 *  
+	 * @param string $Url Url to Parse
+	 * @return null|string[] extracted Url parts ['scheme','user','pass','host'....]
+	 
+	 */
+	public static function parse($Url ){
 		if(empty($Url))return null;
 		
 		$firstDel=($Url[0]=='/' || $Url[0]=='\\')?$Url[0]:'';
@@ -39,7 +53,11 @@ class URL {
 // 		$r['port']=intval($r['port']);
 		return $r;		
 	}
-	public final function Set($Host){
+	/**
+	 * @param string $Host set the hostpart of Url
+	 * @return NULL|boolean
+	 */
+	public final function Set( $Host){
 		if(empty($Host))return ($this->Clear()); 
 		if(preg_match('/\<.*\>/',$Host)){
 			$search=array_keys($this->_URL);
@@ -358,6 +376,7 @@ class DEBUG {
 		return $MaxLength&&strlen($r)>$MaxLength?substr($r,0,$MaxLength-3).'...':$r;
 	}
 	public static function as_array($array){
+		if(!is_array($array)) $array=is_object($array)?(array)$array:[$array];
 		$out=[];
 		foreach($array as $key=>$item)
 			if (is_array($item))$out[]='['.static::as_array($item).']';	else $out[]=is_bool($item)?($item?'true':'false'):$item;

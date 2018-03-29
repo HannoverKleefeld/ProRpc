@@ -59,6 +59,15 @@ if(!function_exists('boolstr')){
 		return $bool?'true':'false';
 	}
 }
+if(!function_exists('mixed2value')){
+	function mixed2value($mixed){
+		if(is_numeric($mixed))$mixed=is_float($mixed)?floatval($mixed):intval($mixed);
+		elseif(strcasecmp($mixed,'true')==0) $mixed=TRUE;
+		elseif(strcasecmp($mixed,'false')==0) $mixed=FALSE;
+		return $mixed;
+	}
+}
+
 
 
 

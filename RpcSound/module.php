@@ -41,28 +41,41 @@ class RpcSoundControl extends IPSControlModule {
 			default:IPS_LogMessage(__CLASS__,"Invalid request action $Ident !  value: $Value");
 		}
 	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see IPSControlModule::GetConfigurationForm()
+	 */
+	public function GetConfigurationForm() {
+		$form=json_decode(parent::GetConfigurationForm (),true);
+		$form["actions"][]=["type"=> "HorizontalSlider", "name"=>"vol","caption"=>"Volume","minimum"=>0,"maximum"=>100,"onClick"=>"RSOUND_SetVolume(\$id,\$vol);"];		
+  		$form["actions"][]=["type"=> "Button", "label"=>"Mute On","onClick"=>"RSOUND_SetMute(\$id,true);"];
+  		$form["actions"][]=["type"=> "Button", "label"=>"Mute Off","onClick"=>"RSOUND_SetMute(\$id,false);"];
+		return json_encode($form);
+	}
+
 	public function SetVolume(int $Volume){
-		return $this->apiHasProp(PROP_VOLUME_CONTROL)?$this->setValue(PROP_VOLUME_CONTROL, $Volume,true):null;
+		return $this->apiHasProp(PROP_VOLUME_CONTROL)?$this->setValueByProp(PROP_VOLUME_CONTROL, $Volume,true):null;
 	}
 	public function SetTreble(int $Treble){
-		return $this->apiHasProp(PROP_TREBLE_CONTROL)?$this->setValue(PROP_TREBLE_CONTROL, $Volume,true):null;
+		return $this->apiHasProp(PROP_TREBLE_CONTROL)?$this->setValueByProp(PROP_TREBLE_CONTROL, $Volume,true):null;
 	}
 	public function SetBass(int $Bass){
-		return $this->apiHasProp(PROP_BASS_CONTROL)?$this->setValue(PROP_BASS_CONTROL, $Volume,true):null;
+		return $this->apiHasProp(PROP_BASS_CONTROL)?$this->setValueByProp(PROP_BASS_CONTROL, $Volume,true):null;
 	}
 	public function SetBalance(int $Balance){
-		return $this->apiHasProp(PROP_BALANCE_CONTROL)?$this->setValue(PROP_BALANCE_CONTROL, $Volume,true):null;
+		return $this->apiHasProp(PROP_BALANCE_CONTROL)?$this->setValueByProp(PROP_BALANCE_CONTROL, $Volume,true):null;
 	}
 	public function SetMute(bool $Mute){
-		return $this->apiHasProp(PROP_MUTE_CONTROL)?$this->setValue(PROP_MUTE_CONTROL, $Mute,true):null;
+		return $this->apiHasProp(PROP_MUTE_CONTROL)?$this->setValueByProp(PROP_MUTE_CONTROL, $Mute,true):null;
 	}
 	public function SetLoudness(bool $Loudness){
-		return $this->apiHasProp(PROP_LOUDNESS_CONTROL)?$this->setValue(PROP_LOUDNESS_CONTROL, $Volume,true):null;
+		return $this->apiHasProp(PROP_LOUDNESS_CONTROL)?$this->setValueByProp(PROP_LOUDNESS_CONTROL, $Volume,true):null;
 	}
 	public function UpdateStatus(bool $Force){
 		if(!parent::UpdateStatus($Force))return false;
 		foreach($this->getProps() as $prop=>$def)
-			if($this->apiHasProp($prop))$this->getValue($prop, $Force);
+			if($this->apiHasProp($prop))$this->getValueByProp($prop, $Force);
 		return true;
 	}
 	protected function getProps(){ //:array{
@@ -76,8 +89,7 @@ class RpcSoundControl extends IPSControlModule {
 			PROP_MUTE_CONTROL=>[0,'~Switch',5,'Speaker']
 		];
 	}
-	protected function setValue(int $Prop, $Value, $Force=false){
-		if(!is_null($ok=parent::setValue($Prop,$Value,$Force)))return $ok;
+	protected function setValueByProp(int $Prop, $Value){
 		switch($Prop){
 			case PROP_VOLUME_CONTROL	: $ok=$this->forwardRequest('SetVolume', ['DesiredVolume'=>(int)$Value]); break;
 			case PROP_BALANCE_CONTROL	: $ok=$this->forwardRequest('SetBalance', ['DesiredBalance'=>(int)$Value]); break;
@@ -86,10 +98,10 @@ class RpcSoundControl extends IPSControlModule {
 			case PROP_LOUDNESS_CONTROL	: $ok=$this->forwardRequest('SetLoudness', ['DesiredLoudness'=>(bool)$Value]);break;
 			case PROP_MUTE_CONTROL		: $ok=$this->forwardRequest('SetMute', ['DesiredMute'=>(bool)$Value]);break;
 		}
-		if($ok)parent::setValue($Prop, $Value, true);
+		if($ok)return parent::setValueByIdent(NAMES_PROPS[$Prop], $Value);
 	}
-	protected function getValue(int $Prop, $Force=false){
-		if(!is_null($value=parent::getValue($Prop,$Force)))return $value;
+	protected function getValueByProp(int $Prop, $Force=false){
+		if(!is_null($value=parent::getValueByProp($Prop,$Force)))return $value;
 		switch ($Prop){
 			case PROP_VOLUME_CONTROL	: $value=$this->forwardRequest('GetVolume', []); break;;
 			case PROP_BALANCE_CONTROL	: $value=$this->forwardRequest('GetBalance',[]); break;
@@ -98,7 +110,7 @@ class RpcSoundControl extends IPSControlModule {
 			case PROP_LOUDNESS_CONTROL	: $value=$this->forwardRequest('GetLoudness', []); break;
 			case PROP_MUTE_CONTROL		: $value=$this->forwardRequest('GetMute', []);break;;
 		}
-		if(!is_null($value))$this->setValue($Prop, $value,false);
+		if(!is_null($value))$this->setValueByIdent(NAMES_PROPS[$Prop], $value);
 		return $value;
 	}
 	

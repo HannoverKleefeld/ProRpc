@@ -8,6 +8,10 @@ class RpcRemoteControl extends IPSControlModule {
 	const new_macro_name = 'new macro';
 	const max_macro_keys = 8;
 	const min_seconds_before_create_timer = 5;
+	/**
+	 * {@inheritDoc}
+	 * @see IPSControlModule::Create()
+	 */
 	function Create(){
 		parent::Create();
 		$this->registerPropertyString('GROUPS',json_encode(IPSRemoteKeys::defaultGroups()));
@@ -26,7 +30,7 @@ class RpcRemoteControl extends IPSControlModule {
 		if(parent::RequestAction($Ident, $Value))return;
 		$groups=json_decode($this->ReadPropertyString('GROUPS'));
 		foreach($groups as $group)if($found=$Ident == 'GROUP_'.$group->ID)break;
-		if($found)$this->setValue(PROP_REMOTE_CONTROL, $Value);
+		if($found)$this->setValueByProp(PROP_REMOTE_CONTROL, $Value);
 		else IPS_LogMessage(__CLASS__,"Invalid request action $Ident !  value: $Value");
 	}
 	function GetConfigurationForm(){
@@ -96,17 +100,17 @@ class RpcRemoteControl extends IPSControlModule {
 	}
 	public function SendKey(int $Key){
 		if($ok=$this->apiHasProp(PROP_REMOTE_CONTROL))
-			$ok=$this->setValue(PROP_REMOTE_CONTROL, $Key,true);
+			$ok=$this->setValueByProp(PROP_REMOTE_CONTROL, $Key,true);
 		$this->SendDebug(__FUNCTION__,"Key: $Key => ".boolstr($ok),0);
 		return $ok;
 	}
 	public function SendTwoKeys(int $Key_first, int $DelaySeconds, int $Key_second){
 		if(empty($Key_first))return false;
-		if(!$this->setValue(PROP_REMOTE_CONTROL, $Key_first))return false;
+		if(!$this->setValueByProp(PROP_REMOTE_CONTROL, $Key_first))return false;
 		if(empty($Key_second))$Key_second=$Key_first;
 		if($DelaySeconds < self::min_seconds_before_create_timer){
 			sleep($DelaySeconds);
-			return $this->setValue(PROP_REMOTE_CONTROL, $Key_second);			
+			return $this->setValueByProp(PROP_REMOTE_CONTROL, $Key_second);			
 		}
 		return $this->_createTimer($Key_second, $DelaySeconds);
 	}
@@ -130,16 +134,18 @@ class RpcRemoteControl extends IPSControlModule {
 			$this->_updateVariablesByKeys([]);			
 		}
 	}
-	protected function setValue(int $Prop, $Value, $Force=false){
- 		parent::setValue($Prop,$Value,$Force);
-// $this->SendDebug(__FUNCTION__,"Key: $KeyCode, Delay : $Delay",0);			
+	protected function setValueByProp(int $Prop, $Value){
 		if($Prop!=PROP_REMOTE_CONTROL)return false;
 		$apikeys=json_decode($this->getBuffer('apiKeys'),true);
 		if(!array_key_exists($Value, $apikeys))return false;
 		$ok=$this->forwardRequest('SendKeyCode', ['KeyCode'=>$Value, 'SendDelayMS'=>0]);	
+		if($ok){
+			
+			$this->forwardRequest('DataChanged', [[NAMES_PROPS[$Prop]=>$Value]]);
+		}
 		return $ok;
 	}
-	protected function getValue(int $Prop, $Force=false){
+	protected function getValueByProp(int $Prop, $Force=false){
  		return null;
 	}
 	private function _updateVariablesByKeys(array $RefKeys){
@@ -157,7 +163,7 @@ class RpcRemoteControl extends IPSControlModule {
 			}
 			$props[$key->GROUPID][$key->KEY]=$key->NAME;
 		}
-		$filter=null;
+		$filter=[];
 		foreach($groups as $group){
 			$vname='GROUP_'.$group->ID;
 			$id=@$this->GetIDForIdent($vname);

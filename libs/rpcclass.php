@@ -1,11 +1,44 @@
 <?php
+/**
+ * @mainpage
+ * PHP Class to manage RPC/UPNP Devices
+ * - create devices
+ * - call devices
+ * - predefine your own functions for devices
+ * - Handles Player, TV Samsung, Sony AVR, Dreambox, Plex, IP-Symcon, Fritz!box
+ * - Support for sending remote KEY codes  
+ * @author Xaver Bauer
+ * @date 23.01.2018
+ * @version 2.0.9
+ */
+
 require_once 'rpcclasses.php';
 require_once 'rpcconstants.inc';
 require_once 'rpcmessages.inc';
 require_once 'rpcmessage.php';
 require_once 'rpclogger.php';
 require_once 'rpcconnections.php';
-
+if(!function_exists('boolstr')){
+	/**
+	 * @param bool $bool
+	 * @return string
+	 */
+	function boolstr(bool $bool){
+		return $bool?'true':'false';
+	}
+}
+if(!function_exists('mixed2value')){
+	/**
+	 * @param mixed $mixed Value to be convert
+	 * @return boolean|number|string|mixed Converted value
+	 */
+	function mixed2value($mixed){
+		if(is_numeric($mixed))$mixed=is_float($mixed)?floatval($mixed):intval($mixed);
+		elseif(strcasecmp($mixed,'true')==0) $mixed=TRUE;
+		elseif(strcasecmp($mixed,'false')==0) $mixed=FALSE;
+		return $mixed;
+	}
+}
 class RPCErrorHandler extends Exception {
  	public static function CatchError($ErrLevel, $ErrMessage) {
 echo "ErrorLevel: $ErrLevel\n";		
@@ -26,13 +59,25 @@ class RPC implements iRpcLogger{
 	private $_connection=null;
 	private $_importDone=false;
 	private $_static = []; // Used for Functions with source code  
-	function __construct($JsonConfigFileNameOrUrlToDescXml=null,RpcLogger $Logger=null){
+	/**
+	 * @param string $Source Json config filename or full Url to device description xml
+	 * @param RpcLogger $Logger
+	 */
+	function __construct($Source=null,RpcLogger $Logger=null){
 		if($Logger)$this->AttachLogger($Logger);
-		if($JsonConfigFileNameOrUrlToDescXml)$this->Load($JsonConfigFileNameOrUrlToDescXml);
+		if($Source)$this->Load($Source);
 	}
+	/**
+	 * Remove Logger Object and Delete this object from Memory  
+	 */
 	function __destruct(){
 		$this->DetachLogger($this->_logger);
 	}
+	/**
+	 * @param string $FunctionName Name of Remote function to call 
+	 * @param array $Arguments Params for Remote call (value2,value2,..) or ('paramname'=>value [,...] )
+	 * @return NULL|boolean|mixed
+	 */
 	function __call($FunctionName, $Arguments){
  		if(count($Arguments)==1 && !empty($Arguments[0]) && is_array($Arguments[0]))$Arguments=$Arguments[0]; // for Calls [Functionname](array params)
  		$this->_error=false;
@@ -65,36 +110,82 @@ class RPC implements iRpcLogger{
 		if(!$this->HasError())$this->debug(DEBUG_CALL,sprintf('Method %s returns %s',$FunctionName,DEBUG::export($result)));
 		return $result;
 	}
+	function __wakeup(){
+// 		echo __CLASS__ . " => WAKEUP\n"; 	
+	}
+	function __sleep(){
+// 		echo __CLASS__ . " => SLEEP\n";
+		return ['_device','_fileName','_logger'];
+	}
+	/** Returns true if device online or false if not
+	 * @return boolean
+	 */
 	public function IsOnline(){
 		if(!is_null($this->_isOnline))return $this->_isOnline;
 		if(empty($this->_device->{DEVICE_CONFIG}->{CONFIG_HOST}))return false;
 		return $this->_isOnline=(bool)NET::ping($this->_device->{DEVICE_CONFIG}->{CONFIG_HOST})!==false;
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see iRpcLogger::AttachLogger()
+	 */
 	public function AttachLogger(RpcLogger $Logger=null){
 		if($Logger)$this->_logger=$Logger->Attach($this);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see iRpcLogger::DetachLogger()
+	 */
 	public function DetachLogger(RpcLogger $Logger=null){
 		if($Logger && $Logger != $this->_logger )return;
 		$this->_logger=$Logger?$Logger->Detach($this):$Logger;
 	}
-	public function Load($JsonConfigFileNameOrUrlToDescXml){
-		if(!preg_match('/\.json/i',$JsonConfigFileNameOrUrlToDescXml))
-			return $this->_import($JsonConfigFileNameOrUrlToDescXml);
+	/**
+	 * Load or Import device. If Source extention is .json then load config when not import config
+	 * @param string $Source Json config filename or full Url to device description xml
+	 * @return boolean|number|NULL|boolean|NULL
+	 */
+	public function Load($Source){
+		if(!preg_match('/\.json/i',$Source))
+			return $this->_import($Source);
 		else  
-			return $this->_load($JsonConfigFileNameOrUrlToDescXml);
+			return $this->_load($Source);
 	}
+	/**
+	 * Save the current device to loaded filename. If device imported then the filename created automatic 
+	 */
 	public function Save(){
 		$this->_save($this->_fileName);
 	}
+	/**
+	 * @return string The current filename if loaded or imported when not returns empty string
+	 */
 	public function GetFilename(){
 		return $this->_fileName;
 	}
+	/**
+	 * Returns true if the device is imported
+	 * @return boolean
+	 */
 	public function DeviceImported(){
 		return $this->_importDone;
 	}
+	/**
+	 * Returns true if api has errors
+	 * @param int $ErrorNo Empty or number of error to check
+	 * @return boolean
+	 */
 	public function HasError($ErrorNo=0){
 		return ($this->_logger)?$this->_error=$this->_logger->HasError($ErrorNo):$this->_error;
 	}
+	/**
+	 * Set the current device Options
+	 * - OPTIONS_NEED_HOST		The Device need a Hostvalue
+	 * - OPTIONS_NEED_PORT		The Device need a Portvalue
+	 * - OPTIONS_NEED_USER_PASS	The Device need User and/or Passoword
+	 * @param int $Options Combined flags of OPTIONS_xxx
+	 * @param string $mode Valid modes are "set" (default), "add" or "del"
+	 */
 	public function SetOptions($Options, $mode='set'){
 		$o=&$this->_device->{DEVICE_CONFIG}->{CONFIG_OPTIONS};
 		switch($mode){
@@ -103,17 +194,81 @@ class RPC implements iRpcLogger{
 			case 'del' : $o-=($o&$Options);
 		}
 	}
+	/**
+	 * Returns true if FunctionName exists
+	 * @param string $FunctionName Functionname to search for
+	 * @return boolean
+	 * @see GetFunction($FunctionName, $ServiceName) GetServiceNames()
+	 */
+	public function FunctionExists($FunctionName){
+		return (bool)$this->GetFunction($FunctionName);
+	}
+	/**
+	 * Returns current asiggned Logger object. 
+	 * This function does not remove references to this class
+	 * @return RpcLogger
+	 */
+	public function GetLogger(){
+		return $this->_logger;
+	}
+	/**
+	 * Returns the current device definition class.
+	 * Changes of the returned Object has no effect in this device config.
+	 * @return NULL|stdClass
+	 */
 	public function GetModelDef(){
 		return empty($this->_device->{DEVICE_DEF})?null: clone $this->_device->{DEVICE_DEF};
 	}
+	/**
+	 * Returns the current device config class.
+	 * ATTENTION: Changes of the returned Object has full effect in this device config.
+	 * @return NULL|stdClass
+	 */
 	public function GetConfig(){
 		return empty($this->_device->{DEVICE_CONFIG})?null:$this->_device->{DEVICE_CONFIG};
 	}
+	/**
+	 * Returns a array with all loaded service names or null if no device loaded
+	 * @return NULL|array
+	 */
 	public function GetServiceNames(){
 		return empty($this->_device)?null:array_keys(get_object_vars($this->_device->{DEVICE_SERVICES}));
 	}
+	/**
+	 * @param string $ServiceName
+	 * @return NULL|stdClass
+	 */
 	public function GetService($ServiceName){
 		return (empty($this->_device->{DEVICE_SERVICES}->$ServiceName))?$this->error(ERR_ServiceNotFound,$ServiceName):$this->_cloneService($this->_device->{DEVICE_SERVICES}->$ServiceName);
+	}
+	public function GetIcon(int $Index=null){
+		if(empty($this->_device->{DEVICE_ICONS}))return null;
+		if(is_null($Index)){
+			$icons=$this->_device->{DEVICE_ICONS};
+			foreach($icons as &$icon){
+				$icon = clone $icon;	
+				$icon->{ICON_URL}=$this->_deviceUrl().$icon->{ICON_URL};
+			}
+		}else if(!empty($this->_device->{DEVICE_ICONS}[$Index])){
+			$icons=clone $this->_device->{DEVICE_ICONS}[$Index];
+			$icons->{ICON_URL}=$this->_deviceUrl().$icons->{ICON_URL};
+		}else $icons=null;
+		return $icons;	
+	}
+	public function GetIconImageTag(int $Index=null){
+		if(!$icons=$this->GetIcon($Index))return null;
+		if(!is_null($Index))$icons=[$icons];
+		foreach($icons as &$f)$f='<img src="'.$f->{ICON_URL}.'" width="'.$f->{ICON_WIDTH}.'" height="'.$f->{ICON_HEIGHT}.'">';
+		return count($icons)==1?$icons[0]:$icons;
+	}
+	
+	/**
+	 * @param int $Props The props to validate
+	 * @return bool True if device has $Props
+	 */
+	public function HasProps(int $Props){
+		if(empty($this->_device->{DEVICE_DEF}->{DEF_PROPS}))return false;
+		return ($this->_device->{DEVICE_DEF}->{DEF_PROPS} & $Props);
 	}
 	public function GetFunctionNames($ServiceName='', $IncludeServiceName=false){
 		if($ServiceName){
@@ -131,7 +286,7 @@ class RPC implements iRpcLogger{
 	public function GetFunction($FunctionName, $ServiceName=null){
 		return $this->_findFunctionService($FunctionName,$ServiceName);
 	}
-	public function GetEventVars($ServiceName, $IncludeName=false){
+	public function GetEventVars($ServiceName='', $IncludeName=false){
 		if($ServiceName){
 			if(!$service=$this->GetService($ServiceName)) return null;
 			if(empty($service->{SERVICE_EVENTS}))return $this->error(ERR_ServiceHasNoEvents,$ServiceName);
@@ -188,20 +343,42 @@ class RPC implements iRpcLogger{
 
 	public function Help($FunctionName='', $HelpMode= HELP_FULL, $ReturnResult=false){
 		require_once 'rpchelp.inc';
+// 		CreateHelpFromRPCClass($this);
 		$help=[];
 		if(empty($FunctionName))foreach($this->_device->{DEVICE_SERVICES} as $serviceName=>$service){
+			if($HelpMode!=HELP_FULL)$help[]="-- Service Name : $serviceName ----------------";
+			$fhelp=[];
 			foreach($service->{SERVICE_FUNCTIONS} as $FunctionName=>$function){
 				$values=empty($function->{FUNCTION_PARAMS}->{PARAMS_IN})?null:$this->_createFunctionValues($function->{FUNCTION_PARAMS}->{PARAMS_IN});
-				$help = array_merge($help,CreateHelp($function,$FunctionName, $values, $HelpMode,$serviceName));	
+				$fhelp[$FunctionName] = CreateHelp($function,$FunctionName, $values, $HelpMode,$serviceName);	
 			}
+			ksort($fhelp);
+			foreach($fhelp as $h)$help=array_merge($help,$h);
 		}elseif($function=$this->_findFunctionService($FunctionName)){
 			$values=empty($function->{FUNCTION_PARAMS}->{PARAMS_IN})?null:$this->_createFunctionValues($function->{FUNCTION_PARAMS}->{PARAMS_IN});
 			$help = CreateHelp($function->{SERVICE_FUNCTIONS},$FunctionName,$values,$HelpMode, $function->{SERVICE_NAME});
-		}	
+		}
 		if($ReturnResult) return implode("\n",$help);
 		echo implode("\n",$help)."\n";
 	}
- 	
+	public function GetCurrentInfo($InstanceID=0){
+		if(!$info = $this->GetPositionInfo($InstanceID))return null;
+		if(preg_match('/<item .*>(.*)<\/item>/',$info['TrackMetaData'],$m))$info['TrackMetaData']=$m[0];
+		$info['TrackMetaData']=str_replace(['r:','dc:','upnp:'],'' , $info['TrackMetaData']);
+		if(!$xml=@simplexml_load_string('<?xml version="1.0"?>'.$info['TrackMetaData']))return null;
+		$track=(array)$xml;
+		$track = $track['@attributes'] + $track;
+		if(isset($track['streamContent'])){
+			$track['streamContent']=(array)$track['streamContent'];
+		}
+		unset($track['@attributes'],$track['class'],$track['streamContent']);
+		$track['duration']=$info['TrackDuration'];
+		$track['relTime']=$info['RelTime'];
+		$track['track']=$info['Track'];
+		foreach ($track as $key=>&$v) if(is_numeric($v))if(is_float($v))$v=floatval($v);else $v=intval($v);elseif($v=='true')$v=true;elseif($v=='false')$v=false;
+		
+		return $track;
+	} 	
 //	Log Error/Debug 	
 	protected function error($Message, $ErrorCode=null, $Params=null /* ... */){
 		if(!$this->_logger){ $this->_error=true; return null;}
@@ -395,9 +572,13 @@ class RPC implements iRpcLogger{
 				$this->error(ERR_NoResponseSID);
 				break;
 			}elseif(!($timeout=$result['TIMEOUT']) || !$timeout=intval(str_ireplace('Second-', '', $timeout))){
-				$this->error(ERR_InvalidTimeouResponse);	
-				break;	
-			}elseif($mode==1){
+				if(is_null($timeout)){
+					$this->error(ERR_InvalidTimeouResponse);
+					break;
+				}
+				$timeout=$RunTimeSec>0 ? $RunTimeSec : 300;
+			}
+			if($mode==1){
 				$event[EVENT_SID]=$result['SID'];
 				$event[EVENT_TIMEOUT]=$timeout;
 				$event[EVENT_SERVICE]=$service->{SERVICE_NAME};

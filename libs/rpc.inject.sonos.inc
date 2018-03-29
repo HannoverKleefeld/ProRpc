@@ -4,6 +4,7 @@ $PRE_DefinedReturnParam  = [VALUE_NAME => 'Result',	VALUE_TYPE => DATATYPE_BOOL]
 $RPC_Inject= [
 	[	
 		INJECT_MODELS  => null,
+		INJECT_OPTIONS	=> OPTIONS_NEED_HOST,	
 		INJECT_SERVICES => [
 			'RenderingControl'=>[
 				SERVICE_NAME => 'RenderingControl',

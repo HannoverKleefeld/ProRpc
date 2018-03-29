@@ -1,6 +1,16 @@
 <?php
 	
+/**
+ * @author Xaver Bauer
+ *
+ */
 abstract class IPSControlModule extends IPSBaseModule {
+	protected $api=null;
+	protected $logger=null;
+	/**
+	 * {@inheritDoc}
+	 * @see IPSModule::Create()
+	 */
 	function Create(){
 		parent::Create();
 		$this->SetBuffer('ApiProps',0);
@@ -13,10 +23,14 @@ abstract class IPSControlModule extends IPSBaseModule {
  		$id=$this->RegisterVariableInteger('LastUpdate','LastUpdate','~UnixTimestamp',0);
  		IPS_SetHidden($id,true);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see IPSModule::MessageSink()
+	 */
 	function MessageSink ( $TimeStamp, $SenderID, $MessageID, $Data ){
 		if($MessageID==11101){ // Instanz wurde verbunden
 			$MessageID='Gateway %s connected';
-			$this->onInterfaceChanged(true, intval($Data));
+			$this->onInterfaceChanged(true, intval(implode($Data)));
 		}elseif($MessageID==11102){ // Instanz wurde getrennt
 			$MessageID='Gateway disconnected';
 			$this->onInterfaceChanged(false,0);
@@ -26,31 +40,26 @@ abstract class IPSControlModule extends IPSBaseModule {
 			$this->RegisterMessage($this->InstanceID,11101); // Instanz wurde verbunden
 			$this->RegisterMessage($this->InstanceID,11102); // Instanz wurde getrennt
 			$this->UnRegisterMessage($this->InstanceID,10503);
-			$this->onInterfaceChanged(true,intval($Data));
+			$this->onInterfaceChanged(true,intval(implode($Data)));
 		}else $MessageID='Unknown MessageID '.$MessageID. ' Data: %s';
 		$this->SendDebug(__FUNCTION__, sprintf($MessageID ,implode($Data)),0);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see IPSModule::GetConfigurationForm()
+	 */
 	function GetConfigurationForm(){
 		$form["elements"][]=["type"=> "Select", "name"=>"InstanceID", "caption"=> "Device InstanceID","options"=> [["label"=>'0',"value"=> 0],["label"=>'1',"value"=> 1],["label"=>'2',"value"=> 2],["label"=>'3',"value"=> 3]]];
-//  		$form["elements"][]=["type"=> "CheckBox", "name"=>"DEL_UNWANTED", "caption"=> "check if you want to delete not used variables."];	
-		
-//  		$actions=json_decode($this->ReadPropertyString('ACTIONS'),true);
-// 		utf8::decode_array($actions);
-// 		foreach($actions as &$v)$v=$v['NAME'];
-// 		$actions=implode(',',$actions);
-// 		$form["actions"][]=["type"=> "Label", "label"=>"Actions : ".$actions];
-//  		$form["actions"][]=["type"=> "Button", "label"=>"About","onClick"=>"IPS_RequestAction(\$id,'ABOUT_ME','');"];
-		
-				
-		$form["status"]=[
-				["code"=>102, "icon"=>"active",  "caption"=> "Instance is connected and ready"],
-				["code"=>200, "icon"=>"error",   "caption"=> "Instance is disconnected"],
-				["code"=>201, "icon"=>"error",   "caption"=> "Connected instance does not support > ".str_ireplace('RPC','',get_class($this))." <"]
-		];
-		
+		if($this->getStatus()>109){
+			$form["status"]=[
+					["code"=>200, "icon"=>"error",   "caption"=> "Instance is disconnected"],
+					["code"=>201, "icon"=>"error",   "caption"=> "Connected instance does not support > ".str_ireplace('RPC','',get_class($this))." <"]
+			];
+		}
 		return json_encode($form);
 	}	
 	function RequestAction($Ident,$Value){
+		if(($ok=parent::RequestAction($Ident, $Value))!==false)return $ok;
 		switch ($Ident){
 			case 'ABOUT_MODULE': break;
 			case 'DEBUG_API'   :  $debug=json_decode($Value); $this->SendDebug($debug[0],$debug[1],0); break;
@@ -65,14 +74,43 @@ abstract class IPSControlModule extends IPSBaseModule {
 // 		}
 		return true;
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see IPSModule::ReceiveData()
+	 */
 	function ReceiveData($JSONString){
 		$this->SendDebug(__CLASS__,"Receive: $JSONString",0);
 		$rd=json_decode($JSONString);
-		if(empty($rd->Buffer))return null;
-		if(empty($rd->Buffer->Command))return null;
+		if($rd->ObjectID==$this->InstanceID)return null; // ignore self sended Data
+		if(empty($rd->Buffer))return null; // ignore no Buffer 
+		if(empty($rd->Buffer->Command))return null; // ignore no Command
+		if($rd->Buffer->Command !=API_PROPS_IDENT){
+			if (!isset($rd->Buffer->Data->InstanceID)){
+				IPS_LogMessage(__CLASS__,"ERROR! ReceiveData Command {$rd->Buffer->Command} with empty InstanceID");
+				return null;
+			}
+			if($rd->Buffer->Data->InstanceID != ($test=$this->ReadPropertyInteger('InstanceID'))){
+				$this->SendDebug(__FUNCTION__,"Command {$rd->Buffer->Command} InstanceID >{$rd->Buffer->Data->InstanceID}< not eqal self InstanceID >$test<",0);
+				return null;			
+			}
+			if($rd->Buffer->Command=='DataChanged' || $rd->Buffer->Command=='PropsChanged'){
+				$rd->Buffer->Data=json_decode(json_encode($rd->Buffer->Data),true);
+				if(isset($rd->Buffer->Data[0]))$rd->Buffer->Data=$rd->Buffer->Data[0];
+				else unset($rd->Buffer->Data['InstanceID']);
+			}
+// 			IPS_LogMessage(__CLASS__,var_export($rd->Buffer->Data,true));
+		}
 		switch($rd->Buffer->Command){
 			case API_PROPS_IDENT : 
 				$this->updateVariablesByProps($rd->Buffer->Data);
+				break;
+			case 'DataChanged' :
+// 				$this->SendDebug(__FUNCTION__, "Data(s) changed => ".implode(',',$rd->Buffer->Data), 0);
+				$this->dataChanged($rd->Buffer->Data);
+				break;
+			case 'PropsChanged':
+// 				$this->SendDebug(__FUNCTION__, "Prop(s) changed => ".$rd->Buffer->Data, 0);
+				$this->_propsChanged($rd->Buffer->Data);				
 				break;
 			default: 
 				if (method_exists($this, $rd->Buffer->Command)){
@@ -86,6 +124,11 @@ abstract class IPSControlModule extends IPSBaseModule {
 		}
 	}
 	
+	/**
+	 * @method UpdateStatus
+	 * @param bool $Force
+	 * @return bool
+	 */
 	public function UpdateStatus(bool $Force){
 		$id=$this->GetIDForIdent('LastUpdate');
 		list($usec, $sec) = explode(" ", microtime());
@@ -98,57 +141,104 @@ abstract class IPSControlModule extends IPSBaseModule {
 					return false;
 				}
 			// 			echo "saved: $t, sec: $sec, usec: $usec";
-			}
-		}
-		SetValue($id,$sec);
+			}else SetValue($id,$sec); 
+		}else SetValue($id,$sec);
 		return true;
 	}
 	
-	// must return array of Props ( VariableType, Profilename, Position [, icon ] )
+	// must return emty array() or array of Props : array( PROP => array( VariableType, Profilename, Position [, icon ] ), PROP => .... )
+	/**
+	 * @method getProps
+	 * @return array
+	 */
 	abstract protected function getProps();//:array;
-	
-	protected function getValue(int $Prop, $Force=false){
-		if($Force)return null;
-		if(!$id=@$this->GetIDForIdent(NAMES_PROPS[$Prop]))return null;
-		return GetValue($id);
+	/**
+	 * @method getPropsAsInt
+	 * @return int
+	 */
+	protected function getPropsAsInt(){
+		return array_sum(array_keys($this->getProps()));
 	}
-	protected function setValue(int $Prop, $Value, $Force=false){
-		if(!$id=@$this->GetIDForIdent(NAMES_PROPS[$Prop]))return false;
-		if(GetValue($id)==$Value)return true;
-		return ($Force)? null: SetValue($id,$Value);
+	/**
+	 * @method getValueByProp
+	 * @param int $Prop
+	 * @param boolean $Force
+	 * @return NULL|mixed
+	 */
+	protected function getValueByProp(int $Prop, $Force=false){
+		if(!array_key_exists($Prop, $this->getProps()) ) return null; 
+		return $Force? null:$this->getValueByIdent(NAMES_PROPS[$Prop]);
 	}
-	protected function setValues(array $PropValues, $Force=false){
-		$myProps=$this->getProps();
-		foreach($PropValues as $Prop=>$Value){
-			if(!is_numeric($Prop)){
-				$uname=strtoupper($Prop);
-				foreach($myProps as $Prop)if($found=$uname==NAMES_PROPS[$Prop])break;
-				if(!$found)continue;
-			}
-			if(array_key_exists($Prop, $myProps))
-				$this->setValue($Prop,$Value,$Force);
-		}
+	/**
+	 * @method setValueByProp
+	 * @param int $Prop
+	 * @param mixed $Value
+	 * @return NULL|boolean
+	 */
+	protected function setValueByProp(int $Prop, $Value){
+		if(!array_key_exists($Prop, $this->getProps()) ) return null; 
+		return $this->setValueByIdent(NAMES_PROPS[$Prop], $Value);
 	}
-	
+	/**
+	 * @method getValueByIdent
+	 * @param string $Ident
+	 * @return NULL|mixed
+	 */
+	protected function getValueByIdent(string $Ident){
+		if(!$id=@$this->GetIDForIdent($Ident))return null;
+		return GetValue($id,$Value);
+	}	
+	/**
+	 * @method setValueByIdent
+	 * @param string $Ident
+	 * @param unknown $Value
+	 * @return NULL|boolean
+	 */
+	protected function setValueByIdent(string $Ident, $Value){
+		if(!$id=@$this->GetIDForIdent($Ident))return null;
+		if(GetValue($id)==$Value)return false;
+		return SetValue($id,$Value);
+	}	
+	/**
+	 * @method apiHasProp
+	 * @param int $Prop
+	 * @return number
+	 */
 	protected function apiHasProp(int $Prop){
 		return intval($this->GetBuffer('ApiProps') & $Prop);
 	}
+	/**
+	 * @method onInterfaceChanged
+	 * @param bool $connected
+	 * @param int $InterfaceID
+	 */
 	protected function onInterfaceChanged(bool $connected, int $InterfaceID){
 		if($connected){
+			$this->SetBuffer('ApiObjectID',$InterfaceID);
 			$apiProps=$this->forwardRequest('RequestProps',[array_sum($this->getProps())]);
 			$this->updateVariablesByProps($apiProps);
 		}else{
+			$this->SetBuffer('ApiObjectID',0);
 			$this->updateVariablesByProps(0);
 			$this->SetStatus(200);
 		}
+		IPS_LogMessage('TEST','InterfaceID:'.$InterfaceID);
 	}
-	protected function updateVariablesByProps($NewProps){
+	/**
+	 * @method onDataChanged
+	 * @param int $Prop
+	 * @param mixed $Value
+	 */
+	protected function onDataChanged(int $Prop, $Value){}
+	/**
+	 * @method updateVariablesByProps
+	 * @param int $NewProps
+	 * @return boolean
+	 */
+	protected function updateVariablesByProps(int $NewProps){
 		$this->SetBuffer('ApiProps',$NewProps);
 		$myProps = $this->getProps();
-		if($NewProps & array_sum(array_keys($myProps))) {
-			$this->SetStatus(102);
-		}else $this->SetStatus(201);
-		$filter=['.*InstanceID.*'];
+		$filter=[];//['.*InstanceID.*'];
 		foreach($myProps as $prop=>$def){
 			if(is_null($def))continue;
 			$id = @$this->GetIDForIdent(NAMES_PROPS[$prop]);
@@ -156,7 +246,7 @@ abstract class IPSControlModule extends IPSBaseModule {
 				if($id)
 					IPS_SetHidden($id,false);
 				else {
-					$id=$this->createVariable(NAMES_PROPS[$prop],$def[0],$def[1],$def[2]);
+					$id=$this->createVariable(NAMES_PROPS[$prop],$this->Translate($def[0]),$def[1],$def[2]);
 					if(!empty($def[3]))IPS_SetIcon($id,$def[3]);
 				}
 				$this->EnableAction(NAMES_PROPS[$prop]);
@@ -167,10 +257,23 @@ abstract class IPSControlModule extends IPSBaseModule {
 			}
 		}
 		$this->updateReceiveFilter($filter);
-		$this->UpdateStatus(true);
+		if(count($myProps)==0 || $NewProps & array_sum(array_keys($myProps))) {
+			$this->SetStatus(102);
+			$this->UpdateStatus(true);
+			return true;
+		}
+		$this->SetStatus(201);
+		return false;
 	}
+	/**
+	 * @method forwardRequest
+	 * @param string $function
+	 * @param array $arguments
+	 * @return NULL|mixed
+	 */
 	protected function forwardRequest(string $function, array $arguments){
-		$arguments['InstanceID']=$this->ReadPropertyInteger('InstanceID');
+		if(!isset($arguments['InstanceID']))
+			$arguments['InstanceID']=$this->ReadPropertyInteger('InstanceID');
 		$data['Buffer']=['Function'=>$function,'Arguments'=>$arguments];
 		$data['DataID']="{19650302-GATE-MAJA-PRPC-20180101XLIB}";
 		$data['ObjectID']=$this->InstanceID;
@@ -178,6 +281,10 @@ abstract class IPSControlModule extends IPSBaseModule {
 		$data=json_encode($data);
 		$this->SendDebug(__FUNCTION__,"Send: $data",0);
 		$result=$this->SendDataToParent($data);
+		if(is_object($result)){
+			$this->SendDebug(__FUNCTION__,"Return: Object",0);
+			return $result;
+		}
 		$this->SendDebug(__FUNCTION__,"Return: $result",0);
 		$result=json_decode($result,true); //utf8::decode_array($result);
 		if(empty($result)||!isset($result['Result'])){
@@ -186,6 +293,14 @@ abstract class IPSControlModule extends IPSBaseModule {
 		}
 		return $result['Result'];
 	}
+	/**
+	 * @method createVariable
+	 * @param string $ident
+	 * @param int $type
+	 * @param string $profile
+	 * @param int $pos
+	 * @return int
+	 */
 	protected function createVariable(string $ident,int $type, $profile='',$pos=0){
 		if($type==0)$id=$this->RegisterVariableBoolean($ident,$ident,$profile,$pos);
 		elseif($type==1)$id=$this->RegisterVariableInteger($ident,$ident,$profile,$pos);
@@ -193,14 +308,69 @@ abstract class IPSControlModule extends IPSBaseModule {
 		elseif($type==3)$id=$this->RegisterVariableString($ident,$ident,$profile,$pos);
 		return $id;
 	}
-	protected function updateReceiveFilter(array $Filter=null){
-		if(empty($Filter))$Filter=[];
-		
+	/**
+	 * @method updateReceiveFilter
+	 * @param array $Filter
+	 */
+	protected function updateReceiveFilter(array $Filter){
+		array_unshift($Filter, '.*DataChanged.*');
+		array_unshift($Filter, '.*PropsChanged.*');
 		array_unshift($Filter, '.*'.API_PROPS_IDENT.'.*');
 		$Filter=implode('|',$Filter);
  		$this->SetReceiveDataFilter ($Filter);
 		$this->SendDebug(__FUNCTION__,"Set receive filter: $Filter",0);
 	}
+	
 
+	/**
+	 * @method getApi
+	 * @return RPC
+	 */
+	protected function getApi(){
+		if($this->api)return $this->api;
+		if(!$InterfaceID=intval($this->GetBuffer('ApiObjectID')))return null;
+		if($this->api=RGATE_GetApi($InterfaceID)){
+			if($this->logger=$this->api->GetLogger())
+				$this->logger->SetParent($this);
+		}
+		return $this->api;
+	}
+	
+	// Only used From ReceiveData [Command]
+	/**
+	 * @method dataChanged
+	 * @param array $PropValues
+	 * @return boolean
+	 */
+	protected function dataChanged(array &$PropValues){
+		$myProps=$this->getProps();
+		foreach($PropValues as $Key=>$Value){
+			$Prop=$Key;
+			if(!is_numeric($Prop)){
+				$uname=strtoupper($Prop);
+				foreach($myProps as $Prop=>$tmp)if($found=$uname==NAMES_PROPS[$Prop])break;
+				if(!$found)continue;
+			}elseif(!array_key_exists($Prop, $myProps))continue;
+			if(is_null($Value))
+				$this->getValueByProp($Prop,true);
+			else 
+				if($this->setValueByIdent(NAMES_PROPS[$Prop],$Value))$this->onDataChanged($Prop, $Value);
+			unset($PropValues[$Key]);
+		}
+		return count($PropValues)==0;
+	}
+	/**
+	 * @method _propsChanged
+	 * @param unknown $Props
+	 * @return NULL|boolean
+	 */
+	private function _propsChanged($Props){
+		if(!is_array($Props)){
+			if(empty($Props))return null;
+			foreach($this->getProps() as $p=>$v)
+				if($Prop & $p)$data[$p]=null;
+		}else $data=&$Props;
+		return count($data)>0?$this->dataChanged($data):false;
+	}
 }
 ?>

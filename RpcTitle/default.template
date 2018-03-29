@@ -1,0 +1,17 @@
+<table style="width: 100%" cellspacing="0" cellpadding="0">
+	<tr>
+		<td rowspan="3" valign="top"></td>
+		<td style="width: 100%">$artist</td>
+		<td style="white-space: nowrap" >Time: $duration&nbsp;&nbsp;</td>
+		<td style="white-space: nowrap" >Rest: $reltime</td>
+	</tr>
+	<tr>
+		<td colspan="3">$title</td>
+	</tr>
+	<tr>
+		<td colspan="3">$album / $creator</td>
+	</tr>
+	<tr>
+		<td colspan="4">$description</td>
+	</tr>
+</table>

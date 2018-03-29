@@ -1,6 +1,25 @@
 <?php
+/** Helper File to import RPC Devices  
+ *   
+ *  @author Xaver Bauer
+ *  @date 21.01.2018 
+ * 
+ *  @version 1.2 
+ *  Kommentare hinzugefügt (Doxygen).
+ *  @version 1.1 
+ *  Toten Code entfernt. 
+ * 
+ *  @version 1.0 
+ *  code created  
+ */
 require_once 'rpc.inject.inc';
 
+/**
+ * @param string $UrlToDescXml Url to description xml
+ * @param string $MyVersion Current Version 
+ * @param RpcLogger $Logger Logger Object
+ * @return null|stdClass Device config class 
+ */
 function ImportRpcDevice($UrlToDescXml, $MyVersion, RpcLogger $Logger=null){
 	static $convertUrl =[CONFIG_SCHEME,CONFIG_LOGIN_U,CONFIG_LOGIN_P,CONFIG_HOST,CONFIG_PORT,0,0,0];
 	static $convertInfo=['deviceType','friendlyName','manufacturer','manufacturerURL','modelDescription','modelName','modelNumber', 'modelURL','serialNumber','UDN'];
@@ -60,6 +79,7 @@ function ImportRpcDevice($UrlToDescXml, $MyVersion, RpcLogger $Logger=null){
  				list($def[DEF_MANU],$def[DEF_MODEL],$controlConfig[CONFIG_SCHEME],$controlConfig[CONFIG_PORT],$controlConfig[CONFIG_CONNTYPE])=$inject[INJECT_INFO];
 			$debug(DEBUG_BUILD,'Found injection %s for model %s',$def[DEF_MANU],$def[DEF_MODEL]);
  			if(!empty($inject[INJECT_PROPS]))$def[DEF_PROPS]=$inject[INJECT_PROPS];
+ 			if(!empty($inject[INJECT_OPTIONS]))$controlConfig[CONFIG_OPTIONS]=$controlConfig[CONFIG_OPTIONS] | $inject[INJECT_OPTIONS];
  			if(!empty($inject[INJECT_SERVICES]))foreach($inject[INJECT_SERVICES] as $sn=>$service){
 				$debug(DEBUG_BUILD + DEBUG_DETAIL, "Inject service $sn");
 				$services[$sn]=$service; $def[DEF_PROPS] =$def[DEF_PROPS] | $getProps($service);
@@ -235,6 +255,7 @@ function ImportRpcDevice($UrlToDescXml, $MyVersion, RpcLogger $Logger=null){
 			if($RPC_Inject)foreach($RPC_Inject as $inject)if(empty($inject[INJECT_MODELS]) || (is_string($inject[INJECT_MODELS]) && $inject[INJECT_MODELS]==$detection[DETECTION_MODEL])|| (is_array($inject[INJECT_MODELS]) && in_array($detection[DETECTION_MODEL],$inject[INJECT_MODELS]))){
 				if(empty($inject[INJECT_SERVICES]))$injections=null;else $injections=&$inject[INJECT_SERVICES];
 				if(!empty($inject[INJECT_PROPS]))$def[DEF_PROPS]=$def[DEF_PROPS] | $inject[INJECT_PROPS];
+				if(!empty($inject[INJECT_OPTIONS]))$controlConfig[CONFIG_OPTIONS]=$controlConfig[CONFIG_OPTIONS] | $inject[INJECT_OPTIONS];
 				
 				$debug(DEBUG_BUILD,'Found injection %s for model %s',$detection[DETECTION_MANU],$detection[DETECTION_MODEL]);
  				break;

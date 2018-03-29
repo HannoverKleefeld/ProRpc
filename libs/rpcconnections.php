@@ -1,10 +1,20 @@
 <?php
 abstract class RPCConnection implements iRpcLogger{
-//	use ErrorHandler;
+
+	/**
+	 * @var array $_creditials Login creditials
+	 * @var RpcLogger $_logger RPC Logger Object
+	 * @var int $_connectionType Current Connection Type
+	 */
 	protected $_creditials = [];
 	protected $_logger = null;
 	private $_connectionType = 0; 
-	function __construct(array $creditials,$Logger , $ConnectionType){
+	/**
+	 * @param array $creditials
+	 * @param RpcLogger $Logger
+	 * @param int $ConnectionType
+	 */
+	function __construct(array $creditials, RpcLogger $Logger , int $ConnectionType){
 		$this->_creditials=$creditials;	
 		$this->_connectionType=$ConnectionType;
 		if($Logger)$this->AttachLogger($Logger);
@@ -12,16 +22,46 @@ abstract class RPCConnection implements iRpcLogger{
 	function __destruct(){
 		$this->DetachLogger($this->_logger);
 	}
-	
+	function __wakeup(){
+		echo __CLASS__ . " => WAKEUP\n"; 	
+	}
+	function __sleep(){
+		echo __CLASS__ . " => SLEEP\n"; 	
+		
+	}
+	/**
+	 * @param string $url
+	 * @param string $serviceID
+	 * @param string $functionname
+	 * @param array $arguments
+	 * @param array $filter
+	 * @return mixed
+	 */
 	abstract public function Execute($url, $serviceID, $functionname,array $arguments, array $filter=null);
+	/**
+	 * {@inheritDoc}
+	 * @see iRpcLogger::AttachLogger()
+	 */
 	public function AttachLogger(RpcLogger $Logger=null){
 		if($Logger)$this->_logger=$Logger->Attach($this);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see iRpcLogger::DetachLogger()
+	 */
 	public function DetachLogger(RpcLogger $Logger=null){
 		if($Logger && $Logger != $this->_logger )return;
 		$this->_logger=$Logger?$Logger->Detach($this):$Logger;
 	}
+	/**
+	 * @return number|int
+	 */
 	public function ConnectionType(){return $this->_connectionType;}
+	/**
+	 * @param string $url
+	 * @param string $content
+	 * @return NULL|string
+	 */
 	public function SendPacket( $url,  $content ){
 		$p=parse_url($url);
 		$port=empty($p['port']) ? 80 : $p['port'];
@@ -41,6 +81,13 @@ abstract class RPCConnection implements iRpcLogger{
 		$this->debug(DEBUG_CALL+DEBUG_DETAIL,'send packet return =>'.($response?'true':'false'),509);
 		return $this->decodePacket($response);
 	}
+	/**
+	 * @param string $Method
+	 * @param string $Url
+	 * @param array $Arguments
+	 * @param string $Content
+	 * @return string
+	 */
 	public static function CreatePacket( $Method, $Url='/', array $Arguments=null, $Content=null){
 		$out=["$Method $Url HTTP/1.1"];
 		if($Arguments)foreach($Arguments as $vN=>$v)$out[]="$vN: $v";
@@ -50,6 +97,12 @@ abstract class RPCConnection implements iRpcLogger{
 		}
 		return implode("\n",$out)."\n\n";
 	}
+	/**
+	 * @param string $Message
+	 * @param int|mixed $ErrorCode
+	 * @param mixed $Params
+	 * @return NULL
+	 */
 	protected function error($Message, $ErrorCode=null, $Params=null /* ... */){
 		if(!$this->_logger)return null;
 		if(is_numeric($Message)){
@@ -59,11 +112,21 @@ abstract class RPCConnection implements iRpcLogger{
 		
 		return $this->_logger->Error($ErrorCode, $Message, $Params);
 	}
+	/**
+	 * @param int $DebugOption
+	 * @param string $Message
+	 * @param mixed $Params
+	 * @return NULL
+	 */
 	protected function debug($DebugOption, $Message, $Params=null /* ... */){
 		if(!$this->_logger)return;
 		if($Params && !is_array($Params))$Params=array_slice(func_get_args(),2);
 		$this->_logger->Debug($DebugOption, $Message, $Params);
 	}
+	/**
+	 * @param string $Result
+	 * @return NULL|string[]
+	 */
 	private function decodePacket( $Result){
 		if(is_null($Result)) return $this->error(ERR_CantGetConnection);
 		if(empty($Result)) return $this->error(ERR_EmptyResponse);
@@ -96,9 +159,17 @@ abstract class RPCConnection implements iRpcLogger{
 	}	
 }
 class RPCSoapConnection extends RPCConnection{
+	/**
+	 * @param array $creditials
+	 * @param RpcLogger $Logger
+	 */
 	function __construct(array $creditials,$Logger){
 		parent::__construct($creditials,$Logger,CONNECTION_TYPE_SOAP);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see RPCConnection::Execute()
+	 */
 	public function Execute( $url,$serviceID, $functionname,array $arguments, array $filter=null){
 		$params=array(
 				'location' 	 => $url,
@@ -119,9 +190,17 @@ class RPCSoapConnection extends RPCConnection{
 	
 }
 class RPCUrlConnection extends RPCConnection{
+	/**
+	 * @param array $creditials
+	 * @param RpcLogger $Logger
+	 */
 	function __construct(array $creditials,$Logger){
 		parent::__construct($creditials,$Logger,CONNECTION_TYPE_URL);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see RPCConnection::Execute()
+	 */
 	public function Execute( $url, $serviceID, $functionname,array $arguments, array $filter=null){
 		$chr=strpos($url,'?')===false ? '?' : '&';
 		if(preg_match("/%function%/i", $url))$url=str_ireplace('%function%', $functionname, $url);
@@ -145,6 +224,11 @@ class RPCUrlConnection extends RPCConnection{
 		}
 		return is_array($result)&&count($result)==0?true:$result;
 	}
+	/**
+	 * @param string $Subject
+	 * @param array $Filter
+	 * @return array|boolean
+	 */
 	protected function Filter($Subject, $Filter){
 		if(!empty($Filter[FILTER_PATTERN_REMOVE])){
 			$patternRemove=$Filter[FILTER_PATTERN_REMOVE];	unset($Filter[FILTER_PATTERN_REMOVE]);
@@ -185,8 +269,21 @@ class RPCUrlConnection extends RPCConnection{
 }
 abstract class RPCCurlConnection extends RPCConnection{
 	private $_curl=null;
+	/**
+	 * @param string $FunctionName
+	 * @param array $Arguments
+	 * @return string
+	 */
 	abstract protected function encodeRequest($FunctionName, $Arguments);
+	/**
+	 * @param string $Result
+	 * @return string
+	 */
 	abstract protected function decodeRequest($Result);
+	/**
+	 * {@inheritDoc}
+	 * @see RPCConnection::Execute()
+	 */
 	public function Execute( $url, $serviceID, $functionname,array $arguments, array $filter=null){
 		if(is_null($this->_curl)){
 			$this->_curl=curl_init();
@@ -216,13 +313,25 @@ abstract class RPCCurlConnection extends RPCConnection{
 	}
 }
 class RPCXMLConnection extends RPCCurlConnection{
+	/**
+	 * @param array $creditials
+	 * @param RpcLogger $Logger
+	 */
 	function __construct(array $creditials,$Logger){
 		parent::__construct($creditials,$Logger ,CONNECTION_TYPE_XML);
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see RPCCurlConnection::encodeRequest()
+	 */
 	protected function encodeRequest($FunctionName, $Arguments){
 		$request=xmlrpc_encode_request($FunctionName,$Arguments,['encoding'=>'utf-8']);
 		return $request;
 	}
+	/**
+	 * {@inheritDoc}
+	 * @see RPCCurlConnection::decodeRequest()
+	 */
 	protected function decodeRequest($Result){
 		if(empty($Result)) return $this->error(ERR_EmptyResponse);
 		$Result = xmlrpc_decode($Result, "utf-8");

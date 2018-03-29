@@ -1,20 +1,22 @@
 <?php
-// if(!class_exists('IPSModule')){
-// 	class IPSModule {
-// 		protected $InstanceID;
-// 		function Create(){}
-// 		function ApplyChanges(){}
-// 		function ReceiveData($JSONString){}
-// 		function GetConfigurationForm(){}	
-// 		function RequestAction($Ident,$Value){}
-// 		function MessageSink($TimeStamp, $SenderID, $MessageID, $Data){}
-// 	}
-// }
+
 const
 	API_PROPS_IDENT = 'API_PROPS';
 
 class IPSBaseModule extends IPSModule {
-
+	function RequestAction($Ident,$Value){
+		if($Ident=='GetInstanceID'){
+			return $this->InstanceID;
+		}
+		return false;
+	}
+	/**
+	 * @method getStatus
+	 * @return int
+	 */
+	protected function getStatus(){
+		return IPS_GetInstance($this->InstanceID)['InstanceStatus'];
+	}
 	protected function readProperty($PropName){
 		return IPS_GetProperty($this->InstanceID,$PropName);
 	}
@@ -54,4 +56,5 @@ class IPSBaseModule extends IPSModule {
 	}
 	
 }
+
 ?>
