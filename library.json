@@ -1,13 +1,13 @@
 {  
-"id": "{19650302-FEB3-4980-XB00-20180101XLIB}",  
+"id": "{165092DF-EE6D-4980-XB32-20180306XLIB}",  
 "author": "Xaver Bauer",  
 "name": "Xavers Module",  
 "url": "",  
 "compatibility": {
-	"version": "4.2",
+	"version": "4.5",
 	"date": 1492639200
 },
-"version": "1.68.4",  
-"build": 1684,  
+"version": "3.20.4",  
+"build": 3204,  
 "date": 1515866032  
 }

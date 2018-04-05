@@ -1,0 +1,11 @@
+{
+	"id": "{19650302-XABA-MAJA-PROA-20180330XLIB}",
+	"name": "ProRpc",
+	"type": 3,
+	"vendor": "Xaver Bauer",
+	"aliases":["ProRpc 1.0"],
+	"parentRequirements": [],
+	"childRequirements": [],
+	"implemented": [],
+	"prefix": "RPC"
+}
